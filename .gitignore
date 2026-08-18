@@ -8,6 +8,14 @@
 *.hprof
 *.apk
 
+# Firebase credentials — regenerate per-developer from the Firebase console,
+# never commit. See android/README.md / MessLedger/README.md for setup.
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Stray archives — should never be committed as opaque zips
+*.zip
+
 # Node
 **/node_modules/
 **/functions/lib/

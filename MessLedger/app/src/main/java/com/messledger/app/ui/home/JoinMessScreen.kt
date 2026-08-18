@@ -80,7 +80,7 @@ fun JoinMessScreen(
 
                 OutlinedTextField(
                     value = inputMessId,
-                    onValueChange = { inputMessId = it; errorMessage = null },
+                    onValueChange = { inputMessId = it.uppercase(); errorMessage = null },
                     label = { Text("Mess ID") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true

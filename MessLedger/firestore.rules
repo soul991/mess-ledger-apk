@@ -30,13 +30,23 @@ service cloud.firestore {
     match /messes/{messId} {
       allow get: if isMember(messId) || hasPendingJoinRequest(messId);
       allow list: if false;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
       allow update, delete: if isManager(messId);
 
       match /members/{memberId} {
         allow read: if isMember(messId);
-        allow create: if isManager(messId);
-        allow update: if isManager(messId) || request.auth.uid == memberId;
+        // Two ways a member doc gets created: (a) the manager approves a join request, or
+        // (b) the mess creator writes their own manager row in the same batch as creating
+        // the mess itself — at that instant isManager() is false (no member doc exists yet),
+        // so it's gated on being the mess's createdBy instead, and only for a manager role.
+        allow create: if isManager(messId) ||
+          (request.auth.uid == memberId && request.resource.data.role == 'manager' &&
+           get(/databases/$(database)/documents/messes/$(messId)).data.createdBy == request.auth.uid);
+        // Self-edits (e.g. your own display name) are fine; changing role — your own or
+        // anyone else's — requires already being the manager, otherwise any member could
+        // write role:"manager" to their own doc and self-promote.
+        allow update: if isManager(messId) ||
+          (request.auth.uid == memberId && request.resource.data.role == resource.data.role);
         allow delete: if isManager(messId);
       }
 
@@ -57,7 +67,12 @@ service cloud.firestore {
       }
 
       match /joinRequests/{uid} {
-        allow create: if request.auth != null && request.auth.uid == uid;
+        // Belt-and-suspenders alongside the app-level existence check in RequestRepository:
+        // without this, Firestore will happily create this doc under a messId that doesn't
+        // correspond to any real mess, which is how "request sent" with nothing on the other
+        // end happens — a client bug, a stale/typo'd ID, or a bypass of the app entirely.
+        allow create: if request.auth != null && request.auth.uid == uid &&
+          exists(/databases/$(database)/documents/messes/$(messId));
         allow read: if isManager(messId) || request.auth.uid == uid;
         allow update, delete: if isManager(messId) || request.auth.uid == uid;
       }

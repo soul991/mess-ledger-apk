@@ -2,7 +2,7 @@ package com.messledger.app.util
 
 object Constants {
     const val SYNTHETIC_EMAIL_DOMAIN = "messledger.internal"
-    const val MESS_ID_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789#*-_"
+    const val MESS_ID_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789*-_"
     const val MESS_ID_LENGTH = 8
 
     const val ROLE_MANAGER = "manager"

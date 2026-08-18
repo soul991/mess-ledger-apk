@@ -5,11 +5,11 @@ import com.messledger.app.data.local.entity.CachedMess
 import com.messledger.app.data.model.Mess
 import com.messledger.app.data.remote.FirebaseAuthService
 import com.messledger.app.data.remote.FirestoreService
+import com.messledger.app.util.MessIdGenerator
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import java.util.UUID
 
 @Singleton
 class MessRepository @Inject constructor(
@@ -20,12 +20,13 @@ class MessRepository @Inject constructor(
     suspend fun createMess(name: String, categories: List<String>): Result<String> {
         return try {
             val user = authService.getCurrentUser() ?: return Result.failure(Exception("Not logged in"))
-            val messId = UUID.randomUUID().toString()
+            val messId = generateUniqueMessId()
             val mess = Mess(
                 id = messId,
                 messName = name,
                 categories = categories,
-                createdAt = System.currentTimeMillis()
+                createdAt = System.currentTimeMillis(),
+                createdBy = user.uid
             )
             firestoreService.createMess(mess, user.uid, user.name)
             messDao.insertMess(CachedMess(mess.id, mess.messName, mess.categories, mess.createdAt))
@@ -71,5 +72,16 @@ class MessRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    // Mirrors the original app's generateUniqueMessId(): short, human-shareable code
+    // (Constants.MESS_ID_CHARS/MESS_ID_LENGTH), retried against real collisions rather
+    // than trusting randomness alone — a raw UUID is not what invite links/screens expect.
+    private suspend fun generateUniqueMessId(): String {
+        repeat(8) {
+            val candidate = MessIdGenerator.generateMessId()
+            if (firestoreService.getMessById(candidate) == null) return candidate
+        }
+        throw Exception("Could not generate a unique mess ID — please try again.")
     }
 }

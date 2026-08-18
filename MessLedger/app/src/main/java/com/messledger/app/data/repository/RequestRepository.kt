@@ -18,12 +18,25 @@ class RequestRepository @Inject constructor(
     suspend fun submitJoinRequest(messId: String): Result<Unit> {
         return try {
             val user = authService.getCurrentUser() ?: return Result.failure(Exception("Not logged in"))
+            // Match Constants.MESS_ID_CHARS' alphabet — a stray lowercase letter or leading/
+            // trailing space would otherwise write the request under a different, nonexistent
+            // mess path that nobody is listening to, which is exactly how a "request sent"
+            // that never reaches any manager happens.
+            val normalizedId = messId.trim().uppercase()
+            if (normalizedId.isEmpty()) {
+                return Result.failure(Exception("Enter a Mess ID."))
+            }
+            // Firestore will happily create a subcollection doc under a parent that doesn't
+            // exist, so without this check, both a typo'd ID and a genuinely invalid one look
+            // identical to the UI: a "successful" write into an orphan path nobody ever reads.
+            val mess = firestoreService.getMessById(normalizedId)
+                ?: return Result.failure(Exception("That Mess ID was not found. Double-check it and try again."))
             val request = JoinRequest(
                 uid = user.uid,
                 name = user.name,
                 requestedAt = System.currentTimeMillis()
             )
-            firestoreService.submitJoinRequest(messId, request)
+            firestoreService.submitJoinRequest(mess.id, request)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
