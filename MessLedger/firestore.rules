@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isMember(messId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/messes/$(messId)/members/$(request.auth.uid)) &&
+        (!('deletedAt' in get(/databases/$(database)/documents/messes/$(messId)/members/$(request.auth.uid)).data) ||
+         get(/databases/$(database)/documents/messes/$(messId)/members/$(request.auth.uid)).data.deletedAt == null);
+    }
+    function isManager(messId) {
+      return isMember(messId) &&
+        get(/databases/$(database)/documents/messes/$(messId)/members/$(request.auth.uid)).data.role == 'manager';
+    }
+    function hasPendingJoinRequest(messId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/messes/$(messId)/joinRequests/$(request.auth.uid));
+    }
+
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /usernames/{username} {
+      allow create: if request.auth != null;
+      allow read: if true;
+      allow update, delete: if false;
+    }
+
+    match /messes/{messId} {
+      allow get: if isMember(messId) || hasPendingJoinRequest(messId);
+      allow list: if false;
+      allow create: if request.auth != null;
+      allow update, delete: if isManager(messId);
+
+      match /members/{memberId} {
+        allow read: if isMember(messId);
+        allow create: if isManager(messId);
+        allow update: if isManager(messId) || request.auth.uid == memberId;
+        allow delete: if isManager(messId);
+      }
+
+      match /meals/{dateStr} {
+        allow read, write: if isMember(messId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read, write: if isMember(messId);
+      }
+
+      match /contributions/{contribId} {
+        allow read, write: if isMember(messId);
+      }
+
+      match /guestMeals/{guestMealId} {
+        allow read, write: if isMember(messId);
+      }
+
+      match /joinRequests/{uid} {
+        allow create: if request.auth != null && request.auth.uid == uid;
+        allow read: if isManager(messId) || request.auth.uid == uid;
+        allow update, delete: if isManager(messId) || request.auth.uid == uid;
+      }
+
+      match /leaveRequests/{uid} {
+        allow create: if request.auth != null && request.auth.uid == uid && isMember(messId);
+        allow read: if isManager(messId) || request.auth.uid == uid;
+        allow update, delete: if isManager(messId) || request.auth.uid == uid;
+      }
+
+      match /activityLog/{entryId} {
+        allow read: if isMember(messId);
+        allow write: if false;
+      }
+    }
+  }
+}

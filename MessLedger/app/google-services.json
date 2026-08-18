@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "671907134793",
+    "project_id": "mess--ledger",
+    "storage_bucket": "mess--ledger.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:671907134793:android:88557c363a0d58d0936e98",
+        "android_client_info": {
+          "package_name": "com.messledger.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKvSnnnp2VO0PHs6Lt6XizQ2u6DH0HUvE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
