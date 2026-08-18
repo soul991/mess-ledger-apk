@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.messledger.app"
-    android:versionCode="1"
-    android:versionName="1.0.0">
+    android:versionCode="2"
+    android:versionName="1.1.0">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" />
+    <!-- Google Play requires targeting API 35 (Android 15) for new app updates as of
+         Aug 31, 2025; this rises to API 36 (Android 16) on Aug 31, 2026 — bump this
+         again alongside compileSdk/build-tools ahead of that date. -->
+    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="35" />
 
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:label="Mess Ledger"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="false"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"

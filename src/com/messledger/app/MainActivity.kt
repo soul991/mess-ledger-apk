@@ -3,7 +3,10 @@ package com.messledger.app
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.webkit.ConsoleMessage
@@ -13,6 +16,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 
 /**
  * Native Android Activity written in Kotlin to host the Mess Ledger engine
@@ -40,7 +45,10 @@ class MainActivity : Activity() {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 databaseEnabled = true
-                allowFileAccess = true
+                // The app only ever needs its own bundled assets (loaded once via
+                // loadUrl below) — it never needs in-page JS to read arbitrary
+                // file:// URLs from device storage, so keep this closed.
+                allowFileAccess = false
                 allowContentAccess = false
                 mediaPlaybackRequiresUserGesture = true
                 cacheMode = WebSettings.LOAD_DEFAULT
@@ -50,11 +58,28 @@ class MainActivity : Activity() {
                 displayZoomControls = false
             }
 
+            // Explicitly off outside of debug builds — remote inspection of a WebView
+            // that talks to Firestore should never be reachable in a shipped build.
+            WebView.setWebContentsDebuggingEnabled(false)
+
             webViewClient = LedgerWebViewClient()
             webChromeClient = LedgerWebChromeClient()
         }
 
         setContentView(webView)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                OnBackInvokedCallback {
+                    if (::webView.isInitialized && webView.canGoBack()) {
+                        webView.goBack()
+                    } else {
+                        finish()
+                    }
+                }
+            )
+        }
 
         if (savedInstanceState == null) {
             webView.loadUrl("file:///android_asset/index.html")
@@ -68,6 +93,9 @@ class MainActivity : Activity() {
         super.onSaveInstanceState(outState)
     }
 
+    // Only reached on API < 33, where the OnBackInvokedCallback registered above
+    // isn't available — enableOnBackInvokedCallback in the manifest makes the
+    // system prefer the callback path on API 33+, so this stays for older devices.
     @Deprecated("Deprecated in Java/Android")
     override fun onBackPressed() {
         if (::webView.isInitialized && webView.canGoBack()) {
@@ -86,12 +114,34 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Custom WebViewClient to keep Firebase Auth, Firestore, and app assets within the WebView.
+     * Custom WebViewClient to keep Firebase Auth, Firestore, and app assets within the WebView,
+     * while sending anything that isn't part of the bundled app (e.g. a link someone puts in a
+     * note or category name) out to the system browser instead of rendering it in-app.
      */
-    private class LedgerWebViewClient : WebViewClient() {
+    private inner class LedgerWebViewClient : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-            // Keep internal navigation and external Firebase auth endpoints inside the WebView
-            return false
+            val url = request.url
+            val scheme = url.scheme?.lowercase()
+
+            // The app's own bundled assets load fine inside the WebView.
+            if (scheme == "file" || scheme == "about" || scheme == "data") return false
+
+            // Firebase's REST/RTDB/Firestore/Auth traffic happens via XHR/fetch under the
+            // hood, not top-level navigation, so any http(s) top-level navigation request
+            // reaching here is an external link (e.g. from user-entered note text) —
+            // hand it to the system browser rather than loading it in-app.
+            if (scheme == "http" || scheme == "https") {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, url))
+                } catch (e: ActivityNotFoundException) {
+                    // No browser available — just ignore rather than crash.
+                }
+                return true
+            }
+
+            // Unknown schemes (intent:, market:, tel:, mailto:, etc.) — don't let the
+            // WebView attempt them, and don't silently swallow them either.
+            return true
         }
     }
 

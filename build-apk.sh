@@ -20,7 +20,16 @@ else
   build_tools="${sdk_root}/build-tools/34.0.0"
 fi
 
-platform_jar="${sdk_root}/platforms/android-34/android.jar"
+# Must track AndroidManifest.xml's targetSdkVersion (currently 35 — Google Play's
+# floor for new app updates as of Aug 2025; rises to 36 on Aug 31, 2026).
+if [[ -f "${sdk_root}/platforms/android-35/android.jar" ]]; then
+  platform_jar="${sdk_root}/platforms/android-35/android.jar"
+elif [[ -f "${sdk_root}/platforms/android-34/android.jar" ]]; then
+  platform_jar="${sdk_root}/platforms/android-34/android.jar"
+else
+  platform_jar="${sdk_root}/platforms/android-33/android.jar"
+fi
+
 build_dir="${project_root}/build"
 assets_dir="${project_root}/assets"
 unsigned_apk="${build_dir}/MessLedger-unsigned.apk"
@@ -36,12 +45,15 @@ for required in "${platform_jar}" "${build_tools}/aapt2" "${build_tools}/d8" "${
 done
 
 print "==> Cleaning build directories..."
-rm -rf "${build_dir}" "${assets_dir}"
-mkdir -p "${build_dir}/classes" "${build_dir}/generated" "${build_dir}/res-compiled" "${build_dir}/dex" "${assets_dir}"
+rm -rf "${build_dir}"
+mkdir -p "${build_dir}/classes" "${build_dir}/generated" "${build_dir}/res-compiled" "${build_dir}/dex"
 
-print "==> Copying web core assets from ${web_dir}..."
-cp -R "${web_dir}/." "${assets_dir}/"
-rm -rf "${assets_dir}/.DS_Store"
+if [[ -d "${web_dir}" ]]; then
+  print "==> Syncing web core assets from ${web_dir}..."
+  mkdir -p "${assets_dir}"
+  cp -R "${web_dir}/." "${assets_dir}/"
+  rm -rf "${assets_dir}/.DS_Store"
+fi
 
 print "==> Compiling Android resources with AAPT2..."
 "${build_tools}/aapt2" compile --dir "${project_root}/res" -o "${build_dir}/res-compiled"
