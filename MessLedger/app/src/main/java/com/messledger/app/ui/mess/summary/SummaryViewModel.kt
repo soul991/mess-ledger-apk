@@ -59,10 +59,14 @@ class SummaryViewModel @Inject constructor(
         // Active members filter for counts, attendance, and settlement
         val activeMembers = members.filter { it.isActive }
 
-        // Settlement calculation for current month
+        // Settlement calculation for current month — pass the FULL member list, not
+        // active-only: calculateSettlement needs a removed member's historical
+        // footprint for months they were genuinely active in. It clamps their accrual
+        // to [joinedAt, deletedAt] internally, so it stays correct without needing an
+        // active-only filter here.
         val settlement = SettlementCalculator.calculateSettlement(
             monthKey = monthKey,
-            members = members, // calculateSettlement filters to active internally
+            members = members,
             meals = meals,
             guestMeals = guestMeals,
             expenses = expenses,

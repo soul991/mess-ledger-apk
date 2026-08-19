@@ -173,7 +173,11 @@ class FirestoreService @Inject constructor(
 
     suspend fun toggleMeal(messId: String, date: String, memberId: String, mealType: String, absent: Boolean) {
         val docRef = firestore.collection("messes").document(messId).collection("meals").document(date)
-        docRef.set(mapOf(memberId to mapOf("${mealType}Absent" to absent)), SetOptions.merge()).await()
+        try {
+            docRef.update("$memberId.${mealType}Absent", absent).await()
+        } catch (e: Exception) {
+            docRef.set(mapOf(memberId to mapOf("${mealType}Absent" to absent)), SetOptions.merge()).await()
+        }
     }
 
     // --- Expenses ---

@@ -6,6 +6,7 @@ import com.messledger.app.data.model.GuestMeal
 import com.messledger.app.data.model.MealStatus
 import com.messledger.app.data.model.Member
 import java.util.Calendar
+import java.util.Locale
 
 data class MemberSettlementRow(
     val member: Member,
@@ -36,8 +37,22 @@ data class SettlementResult(
 object SettlementCalculator {
 
     /**
-     * Ports calcSettlement(monthKey) faithfully from index.html (lines 994-1078).
-     * Filters to active members (members.filter { it.isActive }) for counts and attendance.
+     * Ports calcSettlement(monthKey) from index.html (lines 994-1078), with one
+     * intentional improvement over the source file: the original has no upper bound
+     * on a member's meal accrual at all, so a removed member keeps accruing "present"
+     * charges forever, in every month after they left — a real bug in the source, not
+     * a behavior worth preserving. This version clamps accrual to [joinedAt, deletedAt]
+     * instead of just [joinedAt, ∞).
+     *
+     * Uses the FULL member list, not active-only — a member removed today must still
+     * show up correctly in a past month's settlement they were genuinely part of.
+     * Filtering to active-only here (as an earlier instruction incorrectly said to do)
+     * would silently drop a removed member's contributions/expenses/meals from every
+     * month they were actually active in, not just the months after their removal.
+     * "Active only" belongs at the call site for concerns that are inherently about
+     * *today* (e.g. the dashboard's today's-meals tally, which correctly filters to
+     * active members separately, outside this function) — not inside the settlement
+     * engine itself, which has to stay correct for arbitrary past months.
      */
     fun calculateSettlement(
         monthKey: String, // "YYYY-MM"
@@ -72,15 +87,17 @@ object SettlementCalculator {
             else -> daysInMonth
         }
 
-        val activeMembers = members.filter { it.isActive }
+        val settlementMembers = members // full list — see doc comment above
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val mealsByMember = mutableMapOf<String, Int>()
 
-        activeMembers.forEach { m ->
+        settlementMembers.forEach { m ->
             val joined = if (m.joinedAt.isNotBlank()) m.joinedAt else "0000-00-00"
+            val removedAt = m.deletedAt?.let { dateFormat.format(java.util.Date(it)) }
             var daysPresent = 0
             for (day in 1..effectiveDays) {
                 val dateStr = "$monthKey-${day.toString().padStart(2, '0')}"
-                if (dateStr >= joined) {
+                if (dateStr >= joined && (removedAt == null || dateStr <= removedAt)) {
                     daysPresent++
                 }
             }
@@ -105,7 +122,7 @@ object SettlementCalculator {
         }
 
         val guestMealsByMember = mutableMapOf<String, Int>()
-        activeMembers.forEach { m -> guestMealsByMember[m.id] = 0 }
+        settlementMembers.forEach { m -> guestMealsByMember[m.id] = 0 }
         guestMeals.forEach { g ->
             if (g.date.startsWith(monthKey)) {
                 val partsDate = g.date.split("-")
@@ -120,7 +137,7 @@ object SettlementCalculator {
 
         val effectiveMeals = mutableMapOf<String, Int>()
         var totalMeals = 0
-        activeMembers.forEach { m ->
+        settlementMembers.forEach { m ->
             val total = (mealsByMember[m.id] ?: 0) + (guestMealsByMember[m.id] ?: 0)
             effectiveMeals[m.id] = total
             totalMeals += total
@@ -137,7 +154,7 @@ object SettlementCalculator {
         val poolEqual = monthExpenses.filter { it.splitType == "equal" }.sumOf { it.amount }
         val mealRate = if (totalMeals > 0) poolMeals / totalMeals else 0.0
         val orphanedMealPool = if (totalMeals == 0) poolMeals else 0.0
-        val equalShare = if (activeMembers.isNotEmpty()) (poolEqual + orphanedMealPool) / activeMembers.size else 0.0
+        val equalShare = if (settlementMembers.isNotEmpty()) (poolEqual + orphanedMealPool) / settlementMembers.size else 0.0
 
         val monthContribs = contributions.filter { c ->
             if (!c.date.startsWith(monthKey)) return@filter false
@@ -146,7 +163,7 @@ object SettlementCalculator {
             day in 1..effectiveDays
         }
 
-        val rows = activeMembers.map { m ->
+        val rows = settlementMembers.map { m ->
             val memEffectiveMeals = effectiveMeals[m.id] ?: 0
             val share = mealRate * memEffectiveMeals + equalShare
             val contribPaid = monthContribs.filter { it.memberId == m.id }.sumOf { it.amount }
