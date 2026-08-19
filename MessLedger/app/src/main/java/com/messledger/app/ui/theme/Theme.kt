@@ -17,16 +17,16 @@ private val LightColorScheme = lightColorScheme(
     secondary = LedgerGreenSoft,
     onSecondary = LedgerOnPrimary,
     secondaryContainer = LedgerGreenPale,
-    onSecondaryContainer = LedgerTextPrimary,
-    background = LedgerSurface,
-    onBackground = LedgerTextPrimary,
-    surface = LedgerCard,
-    onSurface = LedgerTextPrimary,
-    surfaceVariant = LedgerSurfaceVariant,
-    onSurfaceVariant = LedgerTextSecondary,
-    error = LedgerError,
+    onSecondaryContainer = Ink,
+    background = Paper,
+    onBackground = Ink,
+    surface = PaperWhite,
+    onSurface = Ink,
+    surfaceVariant = Paper,
+    onSurfaceVariant = InkSoft,
+    error = DebitRed,
     onError = LedgerOnPrimary,
-    outline = LedgerDivider
+    outline = PaperLine
 )
 
 @Composable
